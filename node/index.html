@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>PandaStream | Admin View</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; text-align: center; }
+        .container { margin-top: 50px; }
+        img { max-width: 90%; border: 2px solid #444; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        .status-on { color: #00ff00; }
+        .status-off { color: #ff4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Live Stream Monitor</h1>
+        <div id="status" class="status-off">Verbindung wird aufgebaut...</div>
+        <br>
+        <img id="stream" src="https://via.placeholder.com/1280x720?text=Warte+auf+FiveM+Daten...">
+    </div>
+
+    <script>
+        // Automatische Verbindung zum Host
+        const socket = io(); 
+        const statusDiv = document.getElementById('status');
+        const img = document.getElementById('stream');
+
+        socket.on('connect', () => {
+            statusDiv.innerText = "Verbunden - Warte auf Stream...";
+            statusDiv.className = "status-on";
+        });
+
+        socket.on('new-frame', (dataUrl) => {
+            img.src = dataUrl;
+        });
+
+        socket.on('disconnect', () => {
+            statusDiv.innerText = "Verbindung unterbrochen";
+            statusDiv.className = "status-off";
+        });
+    </script>
+</body>
+</html>

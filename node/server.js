@@ -1,46 +1,46 @@
-import WebSocket, { WebSocketServer } from 'ws';
-import express from 'express';
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const bodyParser = require('body-parser');
+const path = require('path');
 
 const app = express();
-const wss = new WebSocketServer({ port: 8080 });
-
-let clients = [];
-
-wss.on('connection', (ws) => {
-    clients.push(ws);
-    console.log('Viewer connected');
-
-    ws.on('close', () => {
-        clients = clients.filter(c => c !== ws);
-        console.log('Viewer disconnected');
-    });
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
 });
 
-// Endpoint für FiveM (empfängt Bilder)
-app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
+const PORT = 3000;
+const AUTH_TOKEN = "pandastream";
 
+// 1. Statische Dateien bereitstellen
+// Dies erlaubt es, die index.html direkt im Browser aufzurufen
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// 2. Middleware für die FiveM Screenshots
+app.use(bodyParser.raw({ type: 'application/octet-stream', limit: '20mb' }));
+
+// 3. Der Endpunkt für FiveM
 app.post('/frame', (req, res) => {
-if (req.query.token !== 'pandastream') {
-        return res.sendStatus(403);
+    if (req.query.token !== AUTH_TOKEN) {
+        return res.status(403).send('Unauthorized');
     }
 
-    const buffer = req.body;
-
-    if (!buffer || buffer.length === 0) {
-        return res.status(400).send('No data');
-    }
-
-    // Broadcast an alle Viewer
-    clients.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(buffer);
-        }
-    });
-
-    res.sendStatus(200);
+    const base64Image = req.body.toString('base64');
+    io.emit('new-frame', `data:image/webp;base64,${base64Image}`);
+    res.status(200).send('OK');
 });
 
-app.listen(3000, () => {
-    console.log('HTTP Server: http://localhost:3000');
-    console.log('WebSocket: ws://localhost:8080');
+io.on('connection', (socket) => {
+    console.log('Browser verbunden:', socket.id);
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`=========================================`);
+    console.log(`SERVER LÄUFT AKTIV`);
+    console.log(`Browser-Link: http://localhost:${PORT}`);
+    console.log(`FiveM-URL: http://DEINE_IP:${PORT}/frame?token=${AUTH_TOKEN}`);
+    console.log(`=========================================`);
 });
