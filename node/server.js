@@ -1,46 +1,43 @@
-import WebSocket, { WebSocketServer } from 'ws';
-import express from 'express';
+import express from "express";
+import { WebSocketServer } from "ws";
+import multer from "multer";
+import path from "path";
 
 const app = express();
 const wss = new WebSocketServer({ port: 8080 });
+const upload = multer(); // Speicher-basiert
 
 let clients = [];
 
-wss.on('connection', (ws) => {
-    clients.push(ws);
-    console.log('Viewer connected');
+// WebSocket Viewer
+wss.on("connection", (ws) => {
+  clients.push(ws);
+  console.log("Viewer connected");
 
-    ws.on('close', () => {
-        clients = clients.filter(c => c !== ws);
-        console.log('Viewer disconnected');
-    });
+  ws.on("close", () => {
+    clients = clients.filter(c => c !== ws);
+    console.log("Viewer disconnected");
+  });
 });
 
-// Endpoint für FiveM (empfängt Bilder)
-app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
+// Serve Viewer HTML
+app.use(express.static(path.join(process.cwd())));
+app.get("/", (req, res) => res.sendFile(path.join(process.cwd(), "viewer.html")));
 
-app.post('/frame', (req, res) => {
-if (req.query.token !== 'pandastream') {
-        return res.sendStatus(403);
-    }
+// CaptureStream Upload Endpoint
+app.post("/:token", upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).send("No data");
 
-    const buffer = req.body;
+  const buffer = req.file.buffer;
+  // Broadcast WebM chunk an alle Viewer
+  clients.forEach(ws => {
+    if (ws.readyState === ws.OPEN) ws.send(buffer);
+  });
 
-    if (!buffer || buffer.length === 0) {
-        return res.status(400).send('No data');
-    }
-
-    // Broadcast an alle Viewer
-    clients.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(buffer);
-        }
-    });
-
-    res.sendStatus(200);
+  res.json({ success: true });
 });
 
 app.listen(3000, () => {
-    console.log('HTTP Server: http://localhost:3000');
-    console.log('WebSocket: ws://localhost:8080');
+  console.log("HTTP Server: http://localhost:3000");
+  console.log("WebSocket: ws://localhost:8080");
 });

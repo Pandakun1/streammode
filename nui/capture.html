@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Stream NUI</title>
+</head>
+<body>
+<script src="capture-stream.js"></script>
+<script>
+window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (data.action === 'startCaptureStream') {
+        captureStream({
+            serverEndpoint: data.serverEndpoint,
+            uploadToken: data.uploadToken,
+            formField: data.formField
+        });
+    } else if (data.action === 'stopCaptureStream') {
+        stopCaptureStream();
+    }
+});
+</script>
+</body>
+</html>

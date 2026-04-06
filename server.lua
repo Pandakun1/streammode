@@ -1,31 +1,37 @@
-local STREAM_URL = "http://127.0.0.1:3000/frame"
+-- Streammode CaptureStream (WebM) für FiveM
+local livestreamActive = false
+local uploadToken = "pandastream" -- Token für Node Server Upload
+local serverEndpoint = "http://127.0.0.1:3000" -- Node Server URL
+local formField = "file" -- optional, Name des FormData Feldes
 
-RegisterCommand("livestream", function(source)
+-- Command /livestream
+RegisterCommand("livestream", function(source, args)
     local src = source
 
-    if src == 0 then return end
-
-    CreateThread(function()
-        while true do
-            exports.screencapture:serverCapture(src, {
-                encoding = "webp",
-                quality = 0.6
-            }, function(data)
-                if not data then return end
-
-                local TOKEN = "pandastream"
-
-                PerformHttpRequest(STREAM_URL .. "?token=" .. TOKEN, function() end, "POST", data, {
-                    ["Content-Type"] = "application/octet-stream"
-                })
-            end, "blob")
-
-            Wait(200) -- ~5 FPS
-            --Wait(100) -- ~10 FPS
-            --Wait(66) -- ~15 FPS
-            --Wait(50) -- ~20 FPS
-            --Wait(40) -- ~25 FPS
-            --Wait(33) -- ~30 FPS
+    if args[1] == "start" then
+        if livestreamActive then
+            print("Livestream läuft bereits")
+            return
         end
-    end)
+
+        livestreamActive = true
+        print("Livestream gestartet von Source:", src)
+
+        -- Trigger NUI auf Client-Seite
+        TriggerClientEvent("streammode:startNuiStream", src, serverEndpoint, uploadToken, formField)
+
+    elseif args[1] == "stop" then
+        if not livestreamActive then
+            print("Livestream ist nicht aktiv")
+            return
+        end
+
+        livestreamActive = false
+        print("Livestream gestoppt von Source:", src)
+
+        -- Stoppe captureStream NUI
+        TriggerClientEvent("streammode:stopNuiStream", src)
+    else
+        print("Ungültiges Argument: /livestream start|stop")
+    end
 end, false)

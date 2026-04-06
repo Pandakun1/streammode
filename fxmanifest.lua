@@ -1,13 +1,22 @@
 fx_version 'cerulean'
 game 'gta5'
 
-ui_page 'ui/index.html'
+author 'Panda'
+description 'Streammode mit captureStream'
+version '1.0.0'
+
+client_scripts {
+    'client.lua'
+}
 
 server_scripts {
     'server.lua'
 }
 
+ui_page 'nui/capture.html'  -- NUI Page registrieren
+
 files {
-    'ui/index.html',
-    'ui/script.js'
+    'nui/capture.html',
+    'nui/capture-stream.js',  -- captureStream Script
+    'nui/style.css'           -- optional
 }

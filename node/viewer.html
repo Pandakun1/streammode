@@ -3,44 +3,34 @@
 <head>
     <title>FiveM Live Stream</title>
     <style>
-        body {
-            margin: 0;
-            background: black;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: white;
-            font-family: Arial;
-        }
-
-        img {
-            max-width: 100%;
-            max-height: 100%;
-        }
+        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        video { max-width: 100%; max-height: 100%; background: black; }
     </style>
 </head>
 <body>
-    <img id="stream" />
-
+    <video id="video" autoplay playsinline></video>
     <script>
-        const ws = new WebSocket('ws://localhost:8080');
-        const img = document.getElementById('stream');
+        const ws = new WebSocket("ws://localhost:8080");
+        const video = document.getElementById("video");
+        let mediaSource = new MediaSource();
+        let sourceBuffer;
 
-        ws.binaryType = 'arraybuffer';
+        video.src = URL.createObjectURL(mediaSource);
+
+        mediaSource.addEventListener("sourceopen", () => {
+            sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8,vorbis"');
+        });
+
+        ws.binaryType = "arraybuffer";
 
         ws.onmessage = (event) => {
-            const blob = new Blob([event.data], { type: 'image/webp' });
-            const url = URL.createObjectURL(blob);
-
-            img.src = url;
-
-            // Speicher freigeben
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            if (sourceBuffer && !sourceBuffer.updating) {
+                sourceBuffer.appendBuffer(new Uint8Array(event.data));
+            }
         };
 
-        ws.onopen = () => console.log('Connected to stream');
-        ws.onclose = () => console.log('Disconnected');
+        ws.onopen = () => console.log("Connected to stream");
+        ws.onclose = () => console.log("Disconnected");
     </script>
 </body>
 </html>
