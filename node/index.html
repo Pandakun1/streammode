@@ -2,43 +2,188 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>PandaStream | Admin View</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FiveM Live Stream Viewer | Enhanced</title>
     <style>
-        body { background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; text-align: center; }
-        .container { margin-top: 50px; }
-        img { max-width: 90%; border: 2px solid #444; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
-        .status-on { color: #00ff00; }
-        .status-off { color: #ff4444; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%);
+            color: #ffffff;
+            font-family: 'Segoe UI', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .header {
+            position: absolute;
+            top: 20px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10;
+        }
+        .title { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); }
+        .stats { display: flex; gap: 20px; font-size: 0.9rem; }
+        .stat { background: rgba(0, 0, 0, 0.6); padding: 5px 10px; border-radius: 10px; border: 1px solid #333; }
+        
+        .container {
+            position: relative;
+            /* WICHTIG: Begrenzt die Darstellungsgröße auf die Originalgröße */
+            width: 848px; 
+            height: 480px;
+            /*display: flex;*/
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            border: 2px solid #333;
+            overflow: hidden;
+        }
+
+        /* Das Canvas ist intern doppelt so groß, wird aber hier auf 720x480 gezwungen */
+        #stream-canvas {
+            width: 848px;
+            height: 480px;
+            /* GPU-Smoothing für das Zusammenpressen */
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: high-quality; 
+            display: none;
+        }
+
+        #status {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 25px;
+            border: 2px solid #00ff00;
+            font-size: 1.1rem;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .footer { position: absolute; bottom: 20px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Live Stream Monitor</h1>
-        <div id="status" class="status-off">Verbindung wird aufgebaut...</div>
-        <br>
-        <img id="stream" src="https://via.placeholder.com/1280x720?text=Warte+auf+FiveM+Daten...">
+    <div class="header">
+        <div class="title">FiveM Enhanced View <span style="color: #00ff00; font-size: 0.8rem;">(HiDPI)</span></div>
+        <div class="stats">
+            <div class="stat" id="fps">FPS: --</div>
+            <div class="stat" id="status-text">Verbinde...</div>
+        </div>
     </div>
 
+    <div class="container">
+        <div id="status">Warte auf Stream-Signal...</div>
+        <canvas id="stream-canvas"></canvas>
+    </div>
+
+    <div class="footer">Client-side Super-Sampling active</div>
+
     <script>
-        // Automatische Verbindung zum Host
-        const socket = io(); 
-        const statusDiv = document.getElementById('status');
-        const img = document.getElementById('stream');
+        const status = document.getElementById('status');
+        const canvas = document.getElementById('stream-canvas');
+        const ctx = canvas.getContext('2d');
+        const fpsDisplay = document.getElementById('fps');
+        const statusText = document.getElementById('status-text');
 
-        socket.on('connect', () => {
-            statusDiv.innerText = "Verbunden - Warte auf Stream...";
-            statusDiv.className = "status-on";
-        });
+        let frameCount = 0;
+        let lastTime = Date.now();
 
-        socket.on('new-frame', (dataUrl) => {
-            img.src = dataUrl;
-        });
+        // WebSocket Setup (bleibt gleich)
+        const socket = new WebSocket(`ws://${window.location.host}?role=viewer`);
 
-        socket.on('disconnect', () => {
-            statusDiv.innerText = "Verbindung unterbrochen";
-            statusDiv.className = "status-off";
-        });
+        socket.onopen = () => {
+            statusText.innerText = "Verbunden";
+            status.innerText = "Verbunden. Warte auf Bilddaten...";
+        };
+
+        let currentImg = new Image();
+        let nextImg = new Image();
+        let opacity = 0;
+        let isFirstFrame = true;
+        let lastTimestamp = 0;
+
+        // WICHTIG: Sorge dafür, dass der WebSocket Blobs empfängt
+        socket.binaryType = 'arraybuffer'; // Wir erwarten jetzt echte Binärdaten
+
+        socket.onmessage = (event) => {
+            const now = Date.now();
+            if (now - lastTimestamp < 20) return; 
+            lastTimestamp = now;
+
+            if (isFirstFrame) {
+                canvas.style.display = 'block';
+                status.style.display = 'none';
+                isFirstFrame = false;
+            }
+
+            // Erzeuge eine URL aus den Binärdaten
+            const blob = new Blob([event.data], { type: 'image/webp' });
+            const imageUrl = URL.createObjectURL(blob);
+
+            const tempImg = new Image();
+            tempImg.onload = () => {
+                // Altes Blob-Objekt freigeben, um Speicherlecks zu vermeiden
+                if (nextImg.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(nextImg.src);
+                }
+
+                currentImg = nextImg; 
+                nextImg = tempImg;
+                opacity = 0; 
+
+                if (canvas.width === 0 || canvas.width === 300) {
+                    canvas.width = 1696; 
+                    canvas.height = 960;
+                }
+            };
+
+            tempImg.onerror = () => {
+                console.error("❌ Dekodierung fehlgeschlagen. Daten fehlerhaft.");
+                URL.revokeObjectURL(imageUrl);
+            };
+
+            tempImg.src = imageUrl;
+        };
+
+        function renderLoop() {
+            if (!isFirstFrame && nextImg.complete && currentImg.complete) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // 1. Basis-Bild
+                ctx.globalAlpha = 1.0;
+                ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+
+                // 2. Interpolation (Erhöht die optischen FPS auf 60)
+                // 0.35 ist ein guter Wert für geringe Latenz bei weichen Übergängen
+                if (opacity < 1.0) {
+                    opacity += 0.5; 
+                }
+
+                // 3. Neues Bild drüberblenden
+                ctx.globalAlpha = Math.min(opacity, 1.0);
+                ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+            }
+            requestAnimationFrame(renderLoop);
+        }
+
+        // Starte den Render-Loop
+        requestAnimationFrame(renderLoop);
+
+        socket.onclose = () => {
+            status.style.display = 'block';
+            status.innerText = "❌ Verbindung getrennt.";
+            canvas.style.display = 'none';
+            statusText.innerText = "Getrennt";
+        };
     </script>
 </body>
 </html>

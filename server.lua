@@ -15,7 +15,10 @@ AddEventHandler("pandastream:server:streamFrame", function(targetSrc, WaitTime)
         while GetPlayerName(src) and activeStreams[src] do
             exports.screencapture:remoteUpload(src, "http://127.0.0.1:3000/frame?token=pandastream", {
                 encoding = "webp",
-                quality = 0.6
+                maxWidth = 960,
+                maxHeight = 540,
+                formField = "file",
+                quality = 0.7
             }, function(data)
             end, "blob")
 

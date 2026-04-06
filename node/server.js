@@ -1,46 +1,49 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
-const bodyParser = require('body-parser');
+const WebSocket = require('ws');
+const multer = require('multer'); // Neu hinzugefügt
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const wss = new WebSocket.Server({ server });
+const upload = multer(); // Speicher-Handler für Dateidaten
 
 const PORT = 3000;
 const AUTH_TOKEN = "pandastream";
 
-// 1. Statische Dateien bereitstellen
-// Dies erlaubt es, die index.html direkt im Browser aufzurufen
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+app.use(express.static(__dirname));
 
-// 2. Middleware für die FiveM Screenshots
-app.use(bodyParser.raw({ type: 'application/octet-stream', limit: '20mb' }));
+// Die Resource 'screencapture' sendet das Bild meistens im Feld 'file'
+app.post('/frame', upload.single('file'), (req, res) => {
+    if (req.query.token !== AUTH_TOKEN) return res.status(403).json({error: 'Auth'});
 
-// 3. Der Endpunkt für FiveM
-app.post('/frame', (req, res) => {
-    if (req.query.token !== AUTH_TOKEN) {
-        return res.status(403).send('Unauthorized');
+    // Wir prüfen, ob 'multer' eine Datei extrahiert hat
+    let imageBuffer = null;
+    
+    if (req.file && req.file.buffer) {
+        imageBuffer = req.file.buffer; // Der saubere Bild-Inhalt
+    } else if (req.body && Buffer.isBuffer(req.body)) {
+        imageBuffer = req.body; // Fallback, falls es doch Rohdaten sind
     }
 
-    const base64Image = req.body.toString('base64');
-    io.emit('new-frame', `data:image/webp;base64,${base64Image}`);
-    res.status(200).send('OK');
-});
+    if (!imageBuffer || imageBuffer.length < 100) {
+        return res.status(400).json({ error: 'No image data found' });
+    }
 
-io.on('connection', (socket) => {
-    console.log('Browser verbunden:', socket.id);
+    // Sende nur den sauberen Buffer an die Browser
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(imageBuffer);
+        }
+    });
+
+    res.status(200).json({ success: true });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`=========================================`);
-    console.log(`SERVER LÄUFT AKTIV`);
-    console.log(`Browser-Link: http://localhost:${PORT}`);
-    console.log(`FiveM-URL: http://DEINE_IP:${PORT}/frame?token=${AUTH_TOKEN}`);
+    console.log(`STREAM SERVER GESTARTET`);
+    console.log(`URL: http://localhost:${PORT}`);
     console.log(`=========================================`);
 });
