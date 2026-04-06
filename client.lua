@@ -1,20 +1,19 @@
--- Client-Side Script für Streammode
-RegisterNetEvent("streammode:startNuiStream")
-AddEventHandler("streammode:startNuiStream", function(serverEndpoint, uploadToken, formField)
-    -- NUI öffnen (optional Fokus)
-    SetNuiFocus(true, true)
-
-    -- NUI Nachricht an captureStream
-    SendNUIMessage({
-        action = "startCaptureStream",
-        serverEndpoint = serverEndpoint,
-        uploadToken = uploadToken,
-        formField = formField
+RegisterNetEvent("streammode:startStream")
+AddEventHandler("streammode:startStream", function(config)
+    -- ruft den Client-Export von screencapture auf
+    exports.screencapture:captureStream({
+        encoding = "webp",
+        quality = 0.6,
+        onFrame = function(frameData)
+            -- frameData ist binär (Blob/Base64) → an Node-Server schicken
+            PerformHttpRequest(config.serverEndpoint .. "?token=" .. config.uploadToken, function() end, "POST", frameData, {
+                ["Content-Type"] = "application/octet-stream"
+            })
+        end
     })
 end)
 
-RegisterNetEvent("streammode:stopNuiStream")
-AddEventHandler("streammode:stopNuiStream", function()
-    SendNUIMessage({ action = "stopCaptureStream" })
-    SetNuiFocus(false, false)
+RegisterNetEvent("streammode:stopStream")
+AddEventHandler("streammode:stopStream", function()
+    exports.screencapture:stopCaptureStream()
 end)

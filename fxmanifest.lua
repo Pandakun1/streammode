@@ -13,10 +13,10 @@ server_scripts {
     'server.lua'
 }
 
-ui_page 'nui/capture.html'  -- NUI Page registrieren
+ui_page 'nui/capture.html'
 
 files {
     'nui/capture.html',
-    'nui/capture-stream.js',  -- captureStream Script
-    'nui/style.css'           -- optional
+    'nui/capture-stream.js',
+    'nui/style.css'
 }
