@@ -6,8 +6,3 @@ ui_page 'ui/index.html'
 server_scripts {
     'server.lua'
 }
-
-files {
-    'ui/index.html',
-    'ui/script.js'
-}
